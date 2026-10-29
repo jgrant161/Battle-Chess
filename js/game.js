@@ -3,6 +3,12 @@
 const APP = { name: 'Checkmate & Chivalry', version: '0.2.0' };
 const BX = 12, BY = 24, SQ = 40, PS = 2;
 const SIDE = { w: 'White', b: 'Black' };
+// Animation pace. Everything on screen (walks and fights) runs at this fraction of full speed.
+const PACES = [
+  { name: 'Relaxed', scale: 0.45 },
+  { name: 'Normal', scale: 0.65 },
+  { name: 'Quick', scale: 1 },
+];
 const LEVELS = [
   { name: 'Squire', depth: 1, noise: 110 },
   { name: 'Knight', depth: 2, noise: 20 },
@@ -17,7 +23,7 @@ canvas.height = CH;
 
 const G = {
   state: Chess.initial(), keys: [], history: [], log: [], lastMove: null, captured: { w: [], b: [] },
-  mode: 'pvp', human: 'w', level: 1, battles: true, busy: false, thinking: false, over: null,
+  mode: 'pvp', human: 'w', level: 1, battles: true, pace: 1, busy: false, thinking: false, over: null,
   selected: -1, targets: [], scene: null, hidden: new Set(), floating: [], toast: null, gen: 0,
 };
 
@@ -36,10 +42,14 @@ function loadGame() {
 }
 
 function savePrefs() {
-  try { localStorage.setItem('pwc-prefs', JSON.stringify({ battles: G.battles, sound: Sound.enabled })); } catch (e) { /* storage unavailable */ }
+  try { localStorage.setItem('pwc-prefs', JSON.stringify({ battles: G.battles, sound: Sound.enabled, pace: G.pace })); } catch (e) { /* storage unavailable */ }
 }
 if (prefs.battles === false) G.battles = false;
 if (prefs.sound === false) Sound.enabled = false;
+if (PACES[prefs.pace]) G.pace = prefs.pace;
+
+// Castling can be entered by tapping the King then either its destination or the Rook.
+const castleRookSq = m => (m.flag === 'cK' ? m.from + 3 : m.flag === 'cQ' ? m.from - 4 : -1);
 
 // ---------- Geometry ----------
 const flipped = () => G.mode === 'cpu' && G.human === 'b';
@@ -114,7 +124,16 @@ function drawBoard(now) {
   if (G.selected >= 0) fill(G.selected, 'rgba(110,190,255,0.45)');
   for (const m of G.targets) {
     const { x, y } = sqRect(m.to);
-    if (m.captured) {
+    if (m.flag === 'cK' || m.flag === 'cQ') {
+      ctx.fillStyle = 'rgba(227,171,47,0.9)';
+      ctx.fillRect(x + 14, y + 14, 12, 12);
+      const r = sqRect(castleRookSq(m));
+      ctx.fillStyle = 'rgba(227,171,47,0.35)';
+      ctx.fillRect(r.x, r.y, SQ, SQ);
+      ctx.fillStyle = 'rgba(227,171,47,0.95)';
+      ctx.fillRect(r.x, r.y, SQ, 3); ctx.fillRect(r.x, r.y + SQ - 3, SQ, 3);
+      ctx.fillRect(r.x, r.y, 3, SQ); ctx.fillRect(r.x + SQ - 3, r.y, 3, SQ);
+    } else if (m.captured) {
       ctx.fillStyle = 'rgba(201,53,63,0.85)';
       for (const [cx, cy] of [[0, 0], [SQ - 8, 0], [0, SQ - 8], [SQ - 8, SQ - 8]]) {
         ctx.fillRect(x + cx, y + cy + (cy ? 6 : 0), 8, 2);
@@ -138,7 +157,7 @@ function drawBoard(now) {
   if (G.toast) {
     const age = (now - G.toast.at) / 1000;
     if (age > 1.3) G.toast = null;
-    else pixText(ctx, G.toast.text, CW / 2, BY + SQ * 4 - 8 - age * 10, { size: 16, color: '#ff5a5f', alpha: Math.min(1, (1.3 - age) / 0.3) });
+    else pixText(ctx, G.toast.text, CW / 2, BY + SQ * 4 - 8 - age * 10, { size: 16, color: G.toast.color || '#ff5a5f', alpha: Math.min(1, (1.3 - age) / 0.3) });
   }
 }
 
@@ -171,7 +190,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   if (G.scene) {
-    G.scene.update(dt);
+    G.scene.update(dt * PACES[G.pace].scale);
     if (G.scene.finished) { const sc = G.scene; G.scene = null; sc.resolve(); }
   }
   ctx.imageSmoothingEnabled = false;
@@ -218,6 +237,7 @@ async function doMove(m) {
     G.hidden.add(rf);
     G.floating.push(rook);
     await play(walkScene(rook, rf, rt));
+    G.toast = { text: 'CASTLED!', at: performance.now(), color: '#e3ab2f' };
   }
   if (m.promo && G.battles) await play(new Battle.Ceremony(mover, m.promo));
   if (gen !== G.gen) return;
@@ -269,7 +289,7 @@ function onBoardTap(sq) {
   if (G.busy || G.over || !isHumanTurn() || sq < 0) return;
   const s = G.state, p = s.board[sq];
   if (G.selected >= 0) {
-    const options = G.targets.filter(m => m.to === sq);
+    const options = G.targets.filter(m => m.to === sq || castleRookSq(m) === sq);
     if (options.length > 1) {
       choosePromotion(s.turn).then(promo => { if (promo) doMove(options.find(m => m.promo === promo)); });
       return;
@@ -329,6 +349,7 @@ function updateHUD() {
   $('battles').textContent = G.battles ? 'Battles on' : 'Battles off';
   $('sound').setAttribute('aria-pressed', String(Sound.enabled));
   $('sound').textContent = Sound.enabled ? 'Sound on' : 'Sound off';
+  $('pace').textContent = `Pace: ${PACES[G.pace].name}`;
   const labels = G.mode === 'cpu'
     ? { [G.human]: 'Your spoils', [G.human === 'w' ? 'b' : 'w']: "Computer's spoils" }
     : { w: "White's spoils", b: "Black's spoils" };
@@ -417,6 +438,7 @@ $('undo').onclick = () => {
 $('aboutBtn').onclick = () => { $('aboutVersion').textContent = `Version ${APP.version}`; $('about').hidden = false; $('aboutClose').focus(); };
 $('aboutClose').onclick = () => { $('about').hidden = true; };
 $('battles').onclick = () => { G.battles = !G.battles; savePrefs(); updateHUD(); };
+$('pace').onclick = () => { G.pace = (G.pace + PACES.length - 1) % PACES.length; savePrefs(); updateHUD(); };
 $('sound').onclick = () => { Sound.enabled = !Sound.enabled; Sound.unlock(); savePrefs(); updateHUD(); };
 
 // ---------- Boot ----------
