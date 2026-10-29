@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Checkmate &amp; Chivalry</string>
+    <string name="title_activity_main">Checkmate &amp; Chivalry</string>
+    <string name="package_name">com.checkmateandchivalry.game</string>
+    <string name="custom_url_scheme">com.checkmateandchivalry.game</string>
+</resources>

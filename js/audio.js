@@ -74,8 +74,22 @@ const Sound = (() => {
     sad: () => seq([392, 370, 349, 330], 0.25, { type: 'triangle', vol: 0.07 }),
   };
 
+  // Phone vibration on big hits: native haptics inside the app, the Vibration API on the web.
+  const RUMBLE = { hit: 'LIGHT', slash: 'LIGHT', bonk: 'MEDIUM', stomp: 'HEAVY', thunder: 'HEAVY' };
+  function buzz(style) {
+    try {
+      const haptics = window.Capacitor?.Plugins?.Haptics;
+      if (haptics) haptics.impact({ style });
+      else if (navigator.vibrate) navigator.vibrate(style === 'HEAVY' ? 40 : 15);
+    } catch (e) { /* no vibration available */ }
+  }
+
   return {
-    play(name) { if (enabled && FX[name]) { try { FX[name](); } catch (e) { /* audio unavailable */ } } },
+    play(name) {
+      if (!enabled || !FX[name]) return;
+      try { FX[name](); } catch (e) { /* audio unavailable */ }
+      if (RUMBLE[name]) buzz(RUMBLE[name]);
+    },
     unlock() { if (enabled) audio(); },
     get enabled() { return enabled; },
     set enabled(v) { enabled = v; },

@@ -1,5 +1,6 @@
 'use strict';
 // Board, input, turn flow, menus and the move log.
+const APP = { name: 'Checkmate & Chivalry', version: '0.2.0' };
 const BX = 12, BY = 24, SQ = 40, PS = 2;
 const SIDE = { w: 'White', b: 'Black' };
 const LEVELS = [
@@ -23,6 +24,17 @@ const G = {
 const prefs = (() => {
   try { return JSON.parse(localStorage.getItem('pwc-prefs') || '{}'); } catch (e) { return {}; }
 })();
+// The game in progress is saved after every move so closing the app never loses it.
+function saveGame() {
+  try {
+    if (G.over) localStorage.removeItem('pwc-game');
+    else localStorage.setItem('pwc-game', JSON.stringify({ snap: snapshot(), mode: G.mode, human: G.human, level: G.level, history: G.history.slice(-60) }));
+  } catch (e) { /* storage unavailable */ }
+}
+function loadGame() {
+  try { return JSON.parse(localStorage.getItem('pwc-game') || 'null'); } catch (e) { return null; }
+}
+
 function savePrefs() {
   try { localStorage.setItem('pwc-prefs', JSON.stringify({ battles: G.battles, sound: Sound.enabled })); } catch (e) { /* storage unavailable */ }
 }
@@ -72,7 +84,7 @@ function boardBG() {
     x.fillRect(sx, sy, 1, SQ);
   }
   // Coordinates inside the edge squares
-  x.font = '8px "Press Start 2P", monospace';
+  x.font = `8px ${PIXEL_FONT}`;
   x.textBaseline = 'top';
   x.fillStyle = 'rgba(29,20,40,0.55)';
   for (let i = 0; i < 8; i++) {
@@ -224,8 +236,9 @@ async function doMove(m) {
 function afterMove() {
   G.busy = false;
   const st = Chess.status(G.state, G.keys);
+  G.over = st;
+  saveGame();
   if (st) {
-    G.over = st;
     updateHUD();
     showGameOver();
     return;
@@ -380,6 +393,7 @@ function newGame() {
   G.keys.push(Chess.key(G.state));
   $('menu').hidden = true;
   $('over').hidden = true;
+  saveGame();
   updateHUD();
   maybeComputer();
 }
@@ -396,17 +410,26 @@ $('undo').onclick = () => {
   restore(snap);
   G.over = null; G.selected = -1; G.targets = [];
   $('over').hidden = true;
+  saveGame();
   updateHUD();
   maybeComputer();
 };
+$('aboutBtn').onclick = () => { $('aboutVersion').textContent = `Version ${APP.version}`; $('about').hidden = false; $('aboutClose').focus(); };
+$('aboutClose').onclick = () => { $('about').hidden = true; };
 $('battles').onclick = () => { G.battles = !G.battles; savePrefs(); updateHUD(); };
 $('sound').onclick = () => { Sound.enabled = !Sound.enabled; Sound.unlock(); savePrefs(); updateHUD(); };
 
 // ---------- Boot ----------
 let fontReady = false;
-if (document.fonts) document.fonts.load('8px "Press Start 2P"').then(() => { fontReady = true; }).catch(() => {});
+if (document.fonts) {
+  Promise.allSettled([document.fonts.load('8px "Press Start 2P Local"'), document.fonts.load('8px "Press Start 2P"')]).then(() => { fontReady = true; });
+}
 
 function start(data) {
+  if (!data || !data.snap) {
+    const saved = loadGame();
+    if (saved && saved.snap && saved.snap.log.length) data = saved;
+  }
   if (data && data.snap) {
     restore(data.snap);
     Object.assign(G, { mode: data.mode, human: data.human, level: data.level, history: data.history || [] });

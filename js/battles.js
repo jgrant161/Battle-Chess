@@ -251,7 +251,7 @@ const Battle = (() => {
       ctx.fillStyle = '#e3ab2f';
       ctx.fillRect(0, 22, CW, 2);
       pixText(ctx, this.title, CW / 2, 7, { color: '#e3ab2f' });
-      if (Math.floor(this.t * 2) % 2 === 0) pixText(ctx, 'TAP TO SKIP', CW / 2, CH - 14, { color: '#9a8cab' });
+      if (!this.still && Math.floor(this.t * 2) % 2 === 0) pixText(ctx, 'TAP TO SKIP', CW / 2, CH - 14, { color: '#9a8cab' });
       if (this.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${this.flash})`; ctx.fillRect(0, 0, CW, CH); }
       const fade = Math.max(clamp01(1 - this.t / 0.25), clamp01((this.t - (this.dur - 0.3)) / 0.3));
       if (fade > 0) { ctx.fillStyle = `rgba(12,8,18,${fade})`; ctx.fillRect(0, 0, CW, CH); }
@@ -384,18 +384,110 @@ const Battle = (() => {
     } },
   };
 
+  // ---- Special matchups, keyed attacker + defender ----
+  Object.assign(SCRIPTS, {
+    // Pawn takes Queen: she laughs, then gets toppled by the little guy.
+    pq: { dur: 3.7, run(b, t) {
+      const { a, d } = b;
+      b.walk(a, 0.15, 0.95, -50, 168);
+      b.at(1.0, 'laugh', () => { Sound.play('magic'); b.say('A mere pawn?', d.x, d.headY() - 22, '#efe6d2', 1.1); });
+      if (t > 1.0 && t < 1.6) d.oy = -Math.abs(Math.sin((t - 1.0) * 16)) * 3;
+      const jabs = [1.75, 2.05];
+      a.ox = jabs.some(j => t >= j - 0.07 && t < j + 0.05) ? 16 : 0;
+      jabs.forEach((j, i) => {
+        b.at(j, 'jab' + i, () => { Sound.play('hit'); b.sparks(d.x - 22, d.y - 46, 8); d.variant = 'flash'; });
+        b.at(j + 0.08, 'jabf' + i, () => { d.variant = ''; });
+      });
+      b.at(1.8, 'ow', () => b.say('OW!', d.x + 20, d.headY() - 16, '#ff5a5f', 0.6));
+      if (t > 2.2) {
+        b.at(2.2, 'fall', () => Sound.play('fall'));
+        d.rot = (clamp01((t - 2.2) / 0.45) ** 2) * Math.PI / 2;
+        b.at(2.65, 'dust', () => { Sound.play('stomp'); b.shake = 6; b.dust(d.x + 40, FLOOR, 14); });
+      }
+      b.at(2.8, 'cheer', () => { Sound.play('fanfare'); b.say('Long live the pawn!', a.x, a.headY() - 22, '#ffd23f', 1.2); });
+      if (t > 2.8 && t < 3.5) a.oy = -Math.abs(Math.sin((t - 2.8) * 9)) * 10;
+      if (t > 3.0) d.alpha = 1 - clamp01((t - 3.0) / 0.4);
+    } },
+    // Knight vs Knight: a sword duel with three clashes before the final cut.
+    nn: { dur: 3.6, run(b, t) {
+      const { a, d } = b;
+      b.walk(a, 0.15, 0.8, -50, 146);
+      if (t < 2.0) b.walk(d, 0.15, 0.8, 250, 204);
+      const clashes = [1.0, 1.3, 1.6];
+      const swing = clashes.find(c => t >= c - 0.1 && t < c + 0.08);
+      a.rot = swing !== undefined ? (t < swing ? -0.25 : 0.25) : 0;
+      d.rot = swing !== undefined ? (t < swing ? 0.25 : -0.25) : 0;
+      clashes.forEach((c, i) => b.at(c, 'clash' + i, () => { Sound.play('slash'); Sound.play('select'); b.sparks(175, FLOOR - 52, 12, '#ffffff'); b.shake = 2; }));
+      b.at(1.95, 'final', () => { Sound.play('slash'); b.fx.push({ kind: 'slash', x: d.x - 6, y: d.y - 44, t: 0, life: 0.2 }); d.variant = 'flash'; b.say('TOUCHE!', d.x, d.y - 110, '#ffffff', 1); });
+      b.at(2.03, 'finalf', () => { d.variant = ''; d.rot = 0; });
+      if (t > 2.1) {
+        d.rot = 0;
+        d.split = Math.max(0.001, clamp01((t - 2.1) / 0.6));
+        b.at(2.7, 'thud', () => { Sound.play('hit'); b.dust(d.x + 34, FLOOR, 8); });
+      }
+      if (t > 2.9) d.alpha = 1 - clamp01((t - 2.9) / 0.4);
+    } },
+    // Bishop vs Bishop: spells collide mid-air, then the second spell lands.
+    bb: { dur: 3.8, run(b, t) {
+      const { a, d } = b;
+      b.walk(a, 0.15, 0.75, -50, 96);
+      if (t > 0.85 && t < 1.2) { a.oy = -3; d.oy = -3; }
+      b.at(0.85, 'charge', () => { Sound.play('magic'); b.twinkle(a.x + 22, a.y - 76, 4, '#9ff3ff'); b.twinkle(d.x - 22, d.y - 76, 4, '#ffb0f0'); });
+      b.at(1.1, 'orbs', () => {
+        Sound.play('zap');
+        b.fx.push({ kind: 'orb', x0: a.x + 22, y0: a.y - 76, x1: 172, y1: FLOOR - 70, t: 0, life: 0.35 });
+        b.fx.push({ kind: 'orb', x0: d.x - 22, y0: d.y - 76, x1: 172, y1: FLOOR - 70, t: 0, life: 0.35 });
+      });
+      b.at(1.45, 'boom', () => { Sound.play('poof'); b.flash = 0.6; b.shake = 4; b.twinkle(172, FLOOR - 70, 12); b.sparks(172, FLOOR - 70, 14, '#9ff3ff'); });
+      b.at(1.75, 'again', () => { Sound.play('zap'); b.fx.push({ kind: 'orb', x0: a.x + 22, y0: a.y - 76, x1: d.x, y1: d.y - 40, t: 0, life: 0.4 }); });
+      b.at(2.15, 'poof', () => { Sound.play('poof'); b.smoke(d.x, d.y - 36, 22); d.skin = 'frog'; d.oy = 0; });
+      b.at(2.4, 'croak', () => { Sound.play('croak'); b.say('RIBBIT!', d.x, d.y - 80, '#8fe07a', 1.1); });
+      if (t > 2.6) { const k = t - 2.6; d.x = 250 + k * 80; d.oy = -Math.abs(Math.sin(k * Math.PI * 2.5)) * 18; }
+      if (t > 3.2) d.alpha = 1 - clamp01((t - 3.2) / 0.4);
+    } },
+    // Rook vs Rook: two towers headbutt until one cracks apart.
+    rr: { dur: 3.4, run(b, t) {
+      const { a, d } = b;
+      b.walk(a, 0.15, 0.9, -50, 150, 'heavy');
+      const butt = (t0, key) => {
+        if (t >= t0 && t < t0 + 0.2) a.x = 150 - 30 * ((t - t0) / 0.2);
+        else if (t >= t0 + 0.2 && t < t0 + 0.32) a.x = 120 + (d.x - 56 - 120) * ((t - t0 - 0.2) / 0.12);
+        else if (t >= t0 + 0.32 && t < t0 + 0.5) a.x = d.x - 56;
+        b.at(t0 + 0.32, key, () => { Sound.play('stomp'); b.shake = 8; b.sparks(d.x - 30, d.y - 50, 12, '#c6bfae'); d.variant = 'flash'; d.x += 8; b.say('CLONK!', d.x, 60, '#ffd23f', 0.8); });
+        b.at(t0 + 0.4, key + 'f', () => { d.variant = ''; });
+      };
+      butt(1.0, 'b1');
+      butt(1.55, 'b2');
+      b.at(2.15, 'crumble', () => { Sound.play('stomp'); b.shake = 10; b.explode(d); });
+    } },
+    // Queen vs Queen: the defender's lightning misses, the attacker's does not.
+    qq: { dur: 3.6, run(b, t) {
+      const { a, d } = b;
+      b.walk(a, 0.15, 0.75, -50, 92);
+      b.dark = t < 0.85 ? 0 : t < 2.6 ? 0.55 * clamp01((t - 0.85) / 0.25) : 0.55 * (1 - clamp01((t - 2.6) / 0.4));
+      b.at(0.9, 'dare', () => { Sound.play('magic'); b.say('How dare you!', d.x, d.headY() - 22, '#ffb0c8', 1.1); });
+      b.at(1.3, 'miss', () => { Sound.play('thunder'); b.bolt(140, FLOOR); b.flash = 0.5; b.dust(140, FLOOR, 10); b.say('MISSED!', 140, FLOOR - 120, '#efe6d2', 0.8); });
+      [1.75, 1.95].forEach((tt, i) => {
+        b.at(tt, 'bolt' + i, () => { Sound.play('thunder'); b.bolt(d.x + rnd(-6, 6), d.y - 40); b.flash = 0.6; b.shake = 5; d.variant = 'flash'; });
+        b.at(tt + 0.07, 'boltf' + i, () => { d.variant = i === 1 ? 'char' : ''; });
+      });
+      b.at(2.4, 'crumble', () => { Sound.play('poof'); b.explode(d); });
+    } },
+  });
+
   class Fight extends Scene {
     constructor(att, attColor, def, defColor) {
       super(`${SIDES[attColor]} ${NAMES[att]} takes ${NAMES[def]}`.toUpperCase(), 0);
       this.a = new Actor(att, attColor, -50, false);
       this.d = new Actor(def, defColor, 250, true);
       this.a.x0key = 'a';
+      this.d.x0key = 'd';
       this.actors = [this.d, this.a];
-      this.script = SCRIPTS[att === 'k' && def === 'q' ? 'kq' : att];
+      this.script = SCRIPTS[att + def] || SCRIPTS[att];
       this.dur = this.script.dur;
     }
     run(t) {
-      if (!this.d.rot && !this.d.split && this.d.sy === 1 && !this.d.skin && t < 1) this.d.oy = Math.round(Math.sin(t * 5));
+      if (!this.d.rot && !this.d.split && this.d.sy === 1 && !this.d.skin && t < 0.85) this.d.oy = Math.round(Math.sin(t * 5));
       this.script.run(this, t);
     }
   }

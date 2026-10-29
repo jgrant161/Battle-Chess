@@ -1,6 +1,8 @@
 'use strict';
 // Shared screen size (internal pixels; the canvas is scaled up with pixelated rendering).
 const CW = 344, CH = 360;
+// Bundled copy first so the packaged app works offline; Google Fonts as the web fallback.
+const PIXEL_FONT = '"Press Start 2P Local", "Press Start 2P", monospace';
 
 // Pixel art. Each letter is a palette slot; '.' is transparent.
 // o outline, b body, l highlight, d shadow, a accent, m/n metal, s skin, e eyes,
@@ -200,7 +202,7 @@ function spriteURL(type, color) {
 function pixText(ctx, str, x, y, { size = 8, color = '#efe6d2', align = 'center', alpha = 1 } = {}) {
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.font = `${size}px "Press Start 2P", monospace`;
+  ctx.font = `${size}px ${PIXEL_FONT}`;
   ctx.textAlign = align;
   ctx.textBaseline = 'top';
   ctx.fillStyle = '#0b0912';

@@ -1,0 +1,15 @@
+{
+  "appId": "com.checkmateandchivalry.game",
+  "appName": "Checkmate & Chivalry",
+  "webDir": "www",
+  "backgroundColor": "#120d1a",
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "backgroundColor": "#120d1a",
+      "showSpinner": false
+    }
+  },
+  "ios": { "contentInset": "never" },
+  "android": { "allowMixedContent": false }
+}

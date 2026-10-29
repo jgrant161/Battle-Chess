@@ -1,0 +1,27 @@
+{
+  "name": "checkmate-and-chivalry",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Retro pixel-art chess where every capture is a fight.",
+  "scripts": {
+    "build": "node tools/build.js",
+    "test": "node tests/rules.test.js",
+    "art": "node tools/make-art.js",
+    "icons": "npx capacitor-assets generate --assetPath resources",
+    "sync": "npm run build && npx cap sync",
+    "android": "npm run sync && npx cap open android",
+    "ios": "npm run sync && npx cap open ios"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.6.0",
+    "@capacitor/splash-screen": "^8.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.6.0"
+  }
+}

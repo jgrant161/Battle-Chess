@@ -1,0 +1,15 @@
+{
+  "name": "Checkmate & Chivalry",
+  "short_name": "Chivalry",
+  "description": "Retro pixel-art chess where every capture is a fight.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#120d1a",
+  "theme_color": "#120d1a",
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
