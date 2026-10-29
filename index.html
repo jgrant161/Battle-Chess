@@ -1,0 +1,222 @@
+<title>Pixel War Chess</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
+<style>
+  /* Layout: arcade cabinet; the board is the screen, a side panel holds controls, spoils and the battle log. */
+  :root {
+    --night: #120d1a;      /* page */
+    --stone: #1d1528;      /* panels */
+    --mortar: #3a2d4a;     /* borders */
+    --parchment: #efe6d2;  /* text */
+    --dust: #9a8cab;       /* secondary text */
+    --gold: #e3ab2f;       /* accent */
+    --blood: #c9353f;      /* danger, black army */
+    --ivory: #ece2c6;      /* white army */
+    --plum: #4d3f70;       /* black army */
+    --font-display: "Press Start 2P", "Courier New", monospace;
+    --font-body: "VT323", "Courier New", monospace;
+    color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body { margin: 0; }
+  body {
+    background: var(--night);
+    color: var(--parchment);
+    font-family: var(--font-body);
+    font-size: 22px;
+    line-height: 1.2;
+  }
+  .app {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding-block: 14px 24px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid;
+    gap: 14px;
+  }
+  header.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+  h1 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: clamp(14px, 3.4vw, 22px);
+    letter-spacing: 0.04em;
+    color: var(--gold);
+    text-shadow: 3px 3px 0 var(--blood);
+  }
+  h1 small { display: block; margin-top: 6px; font-size: 0.45em; color: var(--dust); text-shadow: none; letter-spacing: 0.12em; }
+  .status-box { display: flex; align-items: center; gap: 10px; font-size: 26px; min-width: 0; }
+  #turnPip { width: 16px; height: 16px; border: 3px solid var(--night); outline: 2px solid var(--gold); flex: none; }
+  #turnPip[data-side="w"] { background: var(--ivory); }
+  #turnPip[data-side="b"] { background: var(--plum); }
+
+  .stage { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+  @media (min-width: 880px) { .stage { grid-template-columns: minmax(0, 1fr) 290px; } }
+
+  .board-wrap { position: relative; width: 100%; max-width: min(720px, calc((100dvh - 120px) * 344 / 360)); min-width: min(100%, 300px); justify-self: center; }
+  #screen {
+    display: block;
+    width: 100%;
+    aspect-ratio: 344 / 360;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 3px solid var(--mortar);
+    box-shadow: 0 0 0 3px var(--night), 6px 6px 0 3px #000;
+    touch-action: manipulation;
+    cursor: pointer;
+  }
+
+  .panel { display: grid; gap: 14px; min-width: 0; }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  button {
+    font-family: var(--font-display);
+    font-size: 10px;
+    line-height: 1.4;
+    color: var(--parchment);
+    background: var(--stone);
+    border: 2px solid var(--mortar);
+    box-shadow: 3px 3px 0 #000;
+    padding: 10px 8px;
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+  button:hover:not(:disabled) { border-color: var(--gold); }
+  button:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #000; }
+  button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button[aria-pressed="true"] { background: var(--gold); color: var(--night); border-color: var(--gold); }
+  .controls button[aria-pressed="false"] { color: var(--dust); }
+  button.primary { background: var(--blood); border-color: var(--blood); color: #fff; font-size: 12px; padding: 14px; }
+
+  section.card { background: var(--stone); border: 2px solid var(--mortar); padding: 12px 14px; min-width: 0; }
+  h2 { margin: 0 0 8px; font-family: var(--font-display); font-size: 10px; letter-spacing: 0.1em; color: var(--gold); text-transform: uppercase; }
+  .spoils { display: grid; gap: 8px; }
+  .spoils-row { display: grid; gap: 2px; }
+  .spoils-row .label { color: var(--dust); font-size: 20px; }
+  .pieces { display: flex; flex-wrap: wrap; gap: 2px; min-height: 30px; align-items: flex-end; }
+  .pieces img { height: 30px; width: auto; image-rendering: pixelated; }
+  .empty { color: var(--dust); }
+
+  #moves { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; counter-reset: mv; font-variant-numeric: tabular-nums; }
+  #moves li { display: grid; grid-template-columns: 3ch 1fr 1fr; gap: 6px; counter-increment: mv; }
+  #moves li::before { content: counter(mv) "."; color: var(--dust); }
+  #moves li.empty { display: block; }
+  #moves li.empty::before { content: none; }
+  .tips { color: var(--dust); font-size: 19px; margin: 0; }
+
+  .overlay {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    background: rgba(12, 8, 18, 0.72);
+    padding: 12px;
+  }
+  .dialog {
+    background: var(--stone);
+    border: 3px solid var(--gold);
+    box-shadow: 6px 6px 0 #000;
+    padding: 18px 16px;
+    width: min(100%, 360px);
+    display: grid; gap: 12px;
+    text-align: center;
+  }
+  .dialog h2 { font-size: clamp(11px, 2.6vw, 14px); margin: 0; text-wrap: balance; }
+  .dialog p { margin: 0; }
+  .seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 6px; }
+  .opt-label { font-size: 20px; color: var(--dust); text-align: left; margin-bottom: -6px; }
+  #cpuOpts { display: grid; gap: 12px; }
+  .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .link-btn { background: none; border: none; box-shadow: none; color: var(--dust); font-size: 9px; padding: 4px; }
+  .promo-btn { display: grid; justify-items: center; gap: 6px; padding: 10px 6px; font-size: 8px; }
+  .promo-btn img { height: 48px; image-rendering: pixelated; }
+  #promoChoices { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    button:active:not(:disabled) { transform: none; }
+  }
+</style>
+
+<div class="app">
+  <header class="top">
+    <h1>Pixel War Chess<small>Every capture is a fight</small></h1>
+    <div class="status-box" role="status" aria-live="polite"><span id="turnPip" data-side="w"></span><span id="status">White to move</span></div>
+  </header>
+
+  <main class="stage">
+    <div class="board-wrap">
+      <canvas id="screen" aria-label="Chess board. Tap a piece, then tap where it should go."></canvas>
+
+      <div id="menu" class="overlay">
+        <div class="dialog" role="dialog" aria-labelledby="menuTitle">
+          <h2 id="menuTitle">Choose your battle</h2>
+          <div class="seg" role="group" aria-label="Players">
+            <button type="button" id="modePvp" data-mode="pvp" aria-pressed="true">Two players</button>
+            <button type="button" id="modeCpu" data-mode="cpu" aria-pressed="false">Vs computer</button>
+          </div>
+          <div id="cpuOpts" hidden>
+            <div class="opt-label">Your army</div>
+            <div class="seg" role="group" aria-label="Your army">
+              <button type="button" id="sideW" data-side="w" aria-pressed="true">White</button>
+              <button type="button" id="sideB" data-side="b" aria-pressed="false">Black</button>
+            </div>
+            <div class="opt-label">Computer strength</div>
+            <div class="seg" role="group" aria-label="Computer strength">
+              <button type="button" id="lvl0" data-level="0" aria-pressed="false">Squire</button>
+              <button type="button" id="lvl1" data-level="1" aria-pressed="true">Knight</button>
+              <button type="button" id="lvl2" data-level="2" aria-pressed="false">King</button>
+            </div>
+          </div>
+          <button type="button" id="start" class="primary">To battle!</button>
+          <button type="button" id="menuClose" class="link-btn">Back to current game</button>
+        </div>
+      </div>
+
+      <div id="promo" class="overlay" hidden>
+        <div class="dialog" role="dialog" aria-labelledby="promoTitle">
+          <h2 id="promoTitle">Your pawn made it! Promote to:</h2>
+          <div id="promoChoices"></div>
+          <button type="button" id="promoCancel" class="link-btn">Cancel move</button>
+        </div>
+      </div>
+
+      <div id="over" class="overlay" hidden>
+        <div class="dialog" role="dialog" aria-labelledby="overTitle">
+          <h2 id="overTitle">Checkmate!</h2>
+          <p id="overSub"></p>
+          <div class="row">
+            <button type="button" id="overAgain" class="primary">Play again</button>
+            <button type="button" id="overLook">See the board</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="panel">
+      <div class="controls">
+        <button type="button" id="newGame">New game</button>
+        <button type="button" id="undo">Undo</button>
+        <button type="button" id="battles" aria-pressed="true">Battles on</button>
+        <button type="button" id="sound" aria-pressed="true">Sound on</button>
+      </div>
+      <section class="card spoils">
+        <h2>Spoils of war</h2>
+        <div class="spoils-row"><span class="label" id="capLabelw">White's spoils</span><div class="pieces" id="capw"></div></div>
+        <div class="spoils-row"><span class="label" id="capLabelb">Black's spoils</span><div class="pieces" id="capb"></div></div>
+      </section>
+      <section class="card">
+        <h2>Battle log</h2>
+        <ol id="moves"></ol>
+      </section>
+      <p class="tips">Tap a piece, then tap a glowing square. Captures start a fight; tap the fight to skip it.</p>
+    </aside>
+  </main>
+</div>
+
+<script src="js/sprites.js"></script>
+<script src="js/chess.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/battles.js"></script>
+<script src="js/game.js"></script>
